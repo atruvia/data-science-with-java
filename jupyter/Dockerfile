@@ -14,25 +14,21 @@ COPY ./jupyter/java ${NOTEBOOK_HOME}/java
 COPY ./jupyter/install.py ${NOTEBOOK_HOME}/install.py
 COPY ./jjava-glue ${NOTEBOOK_HOME}/jjava-glue
 
-# Build the jjava-glue project first and install it locally
+# Build the jjava-glue project first and install it locally and create a list of jjava-glue artifacts directly
 WORKDIR ${NOTEBOOK_HOME}/jjava-glue
-RUN mvn clean install -DskipTests
-
-# Create a list of jjava-glue artifacts directly
-RUN mvn -q dependency:build-classpath -Dmdep.outputFile=${NOTEBOOK_HOME}/jjava-glue-classpath.txt
+RUN mvn clean install -DskipTests \
+    && mvn -q dependency:build-classpath -Dmdep.outputFile=${NOTEBOOK_HOME}/jjava-glue-classpath.txt
 
 # Use Maven to download dependencies for JJava
 WORKDIR ${NOTEBOOK_HOME}/java
 
 # Download the JJava jar directly
-RUN mvn dependency:get -Dartifact=org.dflib.jjava:jjava:1.0-M3 -Ddest=./ -Dtransitive=false
-RUN ln -sf jjava-1.0-M3.jar jjava.jar
+RUN mvn dependency:get -Dartifact=org.dflib.jjava:jjava:1.0-M3 -Ddest=./ -Dtransitive=false \
+    && ln -sf jjava-1.0-M3.jar jjava.jar
 
-# Download all dependencies
-RUN mvn dependency:copy-dependencies -DoutputDirectory=./lib
-
-# Create a list of dependencies for the classpath, add jjava.jar, jjava-glue, jjava-glue
-RUN cat <<EOF > ${NOTEBOOK_HOME}/java/classpath.txt
+# Download all dependencies and create a list of dependencies for the classpath, add jjava.jar, jjava-glue, jjava-glue
+RUN mvn dependency:copy-dependencies -DoutputDirectory=./lib \
+    && cat <<EOF > ${NOTEBOOK_HOME}/java/classpath.txt
 $(find ./lib -name "*.jar" | tr '\n' ':')\
 ${NOTEBOOK_HOME}/java/jjava.jar:\
 $(cat ${NOTEBOOK_HOME}/jjava-glue-classpath.txt):\
