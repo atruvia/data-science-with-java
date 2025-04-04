@@ -12,7 +12,7 @@ This repository provides a Docker-based environment with Jupyter notebooks demon
 
 ```bash
 git clone git@github.com:bsbodden/data-science-with-java.git
-cd data-science-with-java.git
+cd data-science-with-java
 ```
 
 ## Start the Docker Containers
