@@ -1,55 +1,55 @@
 FROM quay.io/jupyter/minimal-notebook:latest
+ARG NOTEBOOK_HOME=/home/${NB_USER}
 
-RUN mkdir /home/jovyan/data
+WORKDIR ${NOTEBOOK_HOME}/data
 
 USER root
-WORKDIR /home/jovyan
+WORKDIR ${NOTEBOOK_HOME}
 
 # Install dependencies: Java 21 and Maven
 RUN apt-get update && apt-get install -y openjdk-21-jdk maven
 
 # Copy the pre-created Maven project and jjava-glue project
-COPY ./jupyter/java /home/jovyan/java
-COPY ./jupyter/install.py /home/jovyan/install.py
-COPY ./jjava-glue /home/jovyan/jjava-glue
+COPY ./jupyter/java ${NOTEBOOK_HOME}/java
+COPY ./jupyter/install.py ${NOTEBOOK_HOME}/install.py
+COPY ./jjava-glue ${NOTEBOOK_HOME}/jjava-glue
 
 # Build the jjava-glue project first and install it locally
-WORKDIR /home/jovyan/jjava-glue
+WORKDIR ${NOTEBOOK_HOME}/jjava-glue
 RUN mvn clean install -DskipTests
 
 # Create a list of jjava-glue artifacts directly
-RUN mvn -q dependency:build-classpath -Dmdep.outputFile=/home/jovyan/jjava-glue-classpath.txt
+RUN mvn -q dependency:build-classpath -Dmdep.outputFile=${NOTEBOOK_HOME}/jjava-glue-classpath.txt
 
 # Use Maven to download dependencies for JJava
-WORKDIR /home/jovyan/java
+WORKDIR ${NOTEBOOK_HOME}/java
 
 # Download the JJava jar directly
 RUN mvn dependency:get -Dartifact=org.dflib.jjava:jjava:1.0-M3 -Ddest=./ -Dtransitive=false
-RUN mv jjava-1.0-M3.jar jjava.jar
+RUN ln -sf jjava-1.0-M3.jar jjava.jar
 
 # Download all dependencies
 RUN mvn dependency:copy-dependencies -DoutputDirectory=./lib
 
-# Create a list of dependencies for the classpath
-RUN find ./lib -name "*.jar" | tr '\n' ':' > classpath.txt
-# Add the jjava.jar to the classpath
-RUN echo -n "/home/jovyan/java/jjava.jar:" >> classpath.txt
-# Add the jjava-glue JARs to the classpath
-RUN cat /home/jovyan/jjava-glue-classpath.txt >> classpath.txt
-# Add the jjava-glue module JARs explicitly to ensure they're included
-RUN echo -n ":/home/jovyan/jjava-glue/core-glue/target/core-glue-0.1.0-SNAPSHOT.jar:" >> classpath.txt
-RUN echo -n ":/home/jovyan/jjava-glue/dflib-glue/target/dflib-glue-0.1.0-SNAPSHOT.jar:" >> classpath.txt
-RUN echo -n ":/home/jovyan/jjava-glue/jfreechart-glue/target/jfreechart-glue-0.1.0-SNAPSHOT.jar:" >> classpath.txt
-RUN echo -n ":/home/jovyan/jjava-glue/commons-math-glue/target/commons-math-glue-0.1.0-SNAPSHOT.jar:" >> classpath.txt
+# Create a list of dependencies for the classpath, add jjava.jar, jjava-glue, jjava-glue
+RUN cat <<EOF > ${NOTEBOOK_HOME}/java/classpath.txt
+$(find ./lib -name "*.jar" | tr '\n' ':')\
+${NOTEBOOK_HOME}/java/jjava.jar:\
+$(cat ${NOTEBOOK_HOME}/jjava-glue-classpath.txt):\
+${NOTEBOOK_HOME}/jjava-glue/core-glue/target/core-glue-0.1.0-SNAPSHOT.jar:\
+${NOTEBOOK_HOME}/jjava-glue/dflib-glue/target/dflib-glue-0.1.0-SNAPSHOT.jar:\
+${NOTEBOOK_HOME}/jjava-glue/jfreechart-glue/target/jfreechart-glue-0.1.0-SNAPSHOT.jar:\
+${NOTEBOOK_HOME}/jjava-glue/commons-math-glue/target/commons-math-glue-0.1.0-SNAPSHOT.jar
+EOF
 
 # Install the kernel with classpath configuration
-WORKDIR /home/jovyan
-RUN python install.py --prefix /opt/conda/ --classpath $(cat /home/jovyan/java/classpath.txt)
+WORKDIR ${NOTEBOOK_HOME}
+RUN python install.py --prefix /opt/conda/ --classpath $(cat ${NOTEBOOK_HOME}/java/classpath.txt)
 
 # Clean up Maven artifacts but keep the jjava.jar and lib directory
-RUN rm -rf /home/jovyan/java/target /home/jovyan/java/.m2 /home/jovyan/java/pom.xml \
-    /home/jovyan/java/classpath.txt /home/jovyan/jjava-glue-classpath.txt \
-    && rm -f /home/jovyan/install.py
+RUN rm -rf ${NOTEBOOK_HOME}/java/target ${NOTEBOOK_HOME}/java/.m2 ${NOTEBOOK_HOME}/java/pom.xml \
+    ${NOTEBOOK_HOME}/java/classpath.txt ${NOTEBOOK_HOME}/jjava-glue-classpath.txt \
+    && rm -f ${NOTEBOOK_HOME}/install.py
 
 # Install conda packages from environment.yml
 COPY ./jupyter/environment.yml /tmp/
@@ -63,5 +63,5 @@ RUN pip install jupyter_darkmodern && \
     fix-permissions "${CONDA_DIR}" && \
     fix-permissions "/home/${NB_USER}"
 
-WORKDIR /home/jovyan
+WORKDIR ${NOTEBOOK_HOME}
 USER $NB_UID
