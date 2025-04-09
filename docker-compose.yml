@@ -9,6 +9,8 @@ services:
     environment:
       - JUPYTER_ENABLE_LAB=yes
       - java.net.useSystemProxies=true
+      - NEXUS_USR=${NEXUS_USR}
+      - NEXUS_PSW=${NEXUS_PSW}
     volumes:
       - ./notebooks:/home/jovyan/notebooks
       - ./data:/home/jovyan/data
